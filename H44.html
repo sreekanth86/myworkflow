@@ -1,0 +1,307 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>GoJS Workflow Builder</title>
+    <script src="https://unpkg.com/gojs/release/go.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #paletteDiv {
+            float: left;
+            width: 180px;
+            height: 100vh;
+            border-right: 1px solid #ccc;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+
+        #diagramDiv {
+            float: left;
+            width: calc(100vw - 470px);
+            height: 80vh;
+            border-right: 1px solid #ccc;
+            background-color: #fcfcfc;
+        }
+
+        #propertyPane {
+            float: right;
+            width: 270px;
+            height: 100vh;
+            background: #f9f9f9;
+            box-sizing: border-box;
+            padding: 15px;
+            display: none;
+        }
+
+        #outputPane {
+            float: left;
+            width: calc(100vw - 450px);
+            height: 20vh;
+            border-top: 1px solid #ccc;
+            background: #f2f2f2;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+
+        label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            margin: 5px 0 10px;
+            padding: 6px;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        #executeBtn {
+            margin-top: 10px;
+            background: #28a745;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Left Palette -->
+    <div id="paletteDiv"></div>
+
+    <!-- Main Diagram -->
+    <div id="diagramDiv"></div>
+
+    <!-- Properties Pane -->
+    <div id="propertyPane">
+        <h3>Step Properties</h3>
+        <form id="propertyForm"></form>
+        <button id="saveBtn">Save</button>
+        <button id="executeBtn">Execute</button>
+    </div>
+
+    <!-- Output JSON Display -->
+    <div id="outputPane">
+        <label>Workflow JSON Output:</label>
+        <textarea id="workflowOutput" rows="5" readonly></textarea>
+    </div>
+
+    <script>
+        const $ = go.GraphObject.make;
+
+        // Step-specific property definitions
+        const stepProperties = {
+            Start: [],
+            End: [],
+            GET: [
+                { key: "url", label: "API URL" },
+                { key: "method", label: "HTTP Method" }
+            ],
+            SET: [
+                { key: "variable", label: "Variable Name" },
+                { key: "value", label: "Value" }
+            ],
+            DBConnect: [
+                { key: "connectionString", label: "Connection String" }
+            ],
+            DBSelect: [
+                { key: "query", label: "SQL Query" },
+                { key: "table", label: "Table Name" }
+            ],
+            Decision: [
+                { key: "condition", label: "Condition" }
+            ]
+        };
+
+        // Initialize Diagram
+        const diagram = $(go.Diagram, "diagramDiv", {
+            "undoManager.isEnabled": true,
+            allowDrop: true,
+            allowMove: true,
+            "ChangedSelection": onNodeClicked,
+            "linkingTool.isEnabled": true,
+            "relinkingTool.isEnabled": true,
+            "draggingTool.isGridSnapEnabled": false,
+            "toolManager.mouseWheelBehavior": go.ToolManager.WheelScroll
+        });
+
+        // Define shared port behavior
+        const portProps = {
+            portId: "",
+            fromLinkable: true,
+            toLinkable: true,
+            cursor: "pointer",
+            fromSpot: go.Spot.AllSides,
+            toSpot: go.Spot.AllSides
+        };
+
+        // Start node
+        diagram.nodeTemplateMap.add("Start",
+            $(go.Node, "Auto",
+                { movable: true, copyable: true, deletable: true },
+                $(go.Shape, "Ellipse", Object.assign({ fill: "lightgreen", width: 80, height: 50 }, portProps)),
+                $(go.TextBlock, { margin: 8, font: "bold 12px sans-serif" },
+                    new go.Binding("text"))
+            )
+        );
+
+        // End node
+        diagram.nodeTemplateMap.add("End",
+            $(go.Node, "Auto",
+                { movable: true, copyable: true, deletable: true },
+                $(go.Shape, "Ellipse", Object.assign({ fill: "salmon", width: 80, height: 50 }, portProps)),
+                $(go.TextBlock, { margin: 8, font: "bold 12px sans-serif" },
+                    new go.Binding("text"))
+            )
+        );
+
+        // Generic step node
+        diagram.nodeTemplateMap.add("Step",
+            $(go.Node, "Spot",
+                { movable: true, copyable: true, deletable: true },
+                $(go.Panel, "Auto",
+                    $(go.Shape, "RoundedRectangle",
+                        Object.assign({ fill: "#e0f0ff", strokeWidth: 1, width: 100, height: 70 }, portProps)),
+                    $(go.Panel, "Vertical",
+                        { margin: 5 },
+                        $(go.Picture, { width: 16, height: 16, margin: 2 }, new go.Binding("source")),
+                        $(go.TextBlock, { margin: 4, font: "bold 11px sans-serif" }, new go.Binding("text"))
+                    )
+                )
+            )
+        );
+
+        // Decision node
+        diagram.nodeTemplateMap.add("Decision",
+            $(go.Node, "Auto",
+                { movable: true, copyable: true, deletable: true },
+                $(go.Shape, "Diamond", Object.assign({ fill: "khaki", width: 80, height: 80 }, portProps)),
+                $(go.TextBlock, { margin: 6, font: "bold 12px sans-serif" },
+                    new go.Binding("text"))
+            )
+        );
+
+        // Links
+        diagram.linkTemplate = $(go.Link,
+            {
+                routing: go.Link.AvoidsNodes,
+                curve: go.Link.JumpOver,
+                corner: 5,
+                relinkableFrom: true,
+                relinkableTo: true
+            },
+            $(go.Shape, { strokeWidth: 1.5 }),
+            $(go.Shape, { toArrow: "Standard" })
+        );
+
+        diagram.model = new go.GraphLinksModel([], []);
+
+        // Palette
+        const palette = $(go.Palette, "paletteDiv", {
+            nodeTemplateMap: diagram.nodeTemplateMap,
+            model: new go.GraphLinksModel([
+                { category: "Start", text: "Start" },
+                { category: "Step", text: "GET", source: "https://cdn-icons-png.flaticon.com/512/2921/2921222.png", stepType: "GET" },
+                { category: "Step", text: "SET", source: "https://cdn-icons-png.flaticon.com/512/711/711284.png", stepType: "SET" },
+                { category: "Step", text: "DBConnect", source: "https://cdn-icons-png.flaticon.com/512/6062/6062646.png", stepType: "DBConnect" },
+                { category: "Step", text: "DBSelect", source: "https://cdn-icons-png.flaticon.com/512/3405/3405771.png", stepType: "DBSelect" },
+                { category: "Decision", text: "If", stepType: "Decision" },
+                { category: "End", text: "End" }
+            ])
+        });
+
+        // --- Dynamic Property Form ---
+        function onNodeClicked() {
+            const node = diagram.selection.first();
+            const pane = document.getElementById("propertyPane");
+            const form = document.getElementById("propertyForm");
+
+            if (!(node instanceof go.Node)) {
+                pane.style.display = "none";
+                return;
+            }
+
+            const data = node.data;
+            const stepType = data.stepType || data.category;
+            const fields = stepProperties[stepType] || [];
+
+            if (stepType === "Start" || stepType === "End") {
+                pane.style.display = "none";
+                return;
+            }
+
+            form.innerHTML = `<label>Title:</label>
+            <input type="text" id="prop_title" value="${data.text || ""}"/>`;
+
+            fields.forEach(f => {
+                form.innerHTML += `
+              <label>${f.label}:</label>
+              <input type="text" id="prop_${f.key}" value="${data[f.key] || ""}" />
+            `;
+            });
+
+            pane.style.display = "block";
+        }
+
+        /*  document.getElementById("saveBtn").addEventListener("click", () => {
+            const node = diagram.selection.first();
+            if (!node) return;
+
+            const form = document.getElementById("propertyForm");
+            const inputs = form.querySelectorAll("input");
+            diagram.startTransaction("updateProps");
+            inputs.forEach(input => {
+              const key = input.id.replace("prop_", "");
+              diagram.model.setDataProperty(node.data, key, input.value);
+            });
+            diagram.commitTransaction("updateProps");
+          });
+          */
+
+        document.getElementById("saveBtn").addEventListener("click", () => {
+            const node = diagram.selection.first();
+            if (!node) return;
+
+            const form = document.getElementById("propertyForm");
+            const inputs = form.querySelectorAll("input");
+
+            diagram.startTransaction("updateProps");
+
+            let stepProps = {};
+            inputs.forEach(input => {
+                const key = input.id.replace("prop_", "");
+                if (key === "title") {
+                    diagram.model.setDataProperty(node.data, "text", input.value);
+                } else {
+                    stepProps[key] = input.value;
+                }
+            });
+
+            diagram.model.setDataProperty(node.data, "stepProperties", stepProps);
+
+            diagram.commitTransaction("updateProps");
+        });
+
+        // --- Execute Button ---
+        document.getElementById("executeBtn").addEventListener("click", () => {
+            const jsonOutput = diagram.model.toJson();
+            document.getElementById("workflowOutput").value = jsonOutput;
+            alert("Workflow diagram has been serialized to JSON!");
+        });
+    </script>
+</body>
+</html>
