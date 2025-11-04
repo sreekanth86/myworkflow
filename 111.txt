@@ -1,0 +1,339 @@
+ public MethodResult If(List<StepProperties> stepproperties, string memberName, Steps step, string executionID)
+ {
+     string ret = string.Empty;
+     List<KeyValuePair<string, string>> msgs = new List<KeyValuePair<string, string>>(); string[] domain;
+     string LeftType = string.Empty; string RightType = string.Empty; string Input = string.Empty; string Output = string.Empty; string answer = string.Empty;
+     string LeftValue = string.Empty; string RightValue = string.Empty; string Condition = string.Empty; string ILeftValue = string.Empty; string IRightValue = string.Empty;
+     string success = string.Empty; string failure = string.Empty; string comparisiontype = string.Empty;
+
+     new cExecutionLog().add2Log("we are in `IF` Step Right now comparing with Left Value", step.Robot_Id, step.Name, StringHelper.eventcode, false);
+
+     try
+     {
+         LeftType = stp.getPropertiesValue(StringHelper.lefttype, step);
+         RightType = stp.getPropertiesValue(StringHelper.righttype, step);
+         Input = stp.getPropertiesValue(StringHelper.input, step);
+         Output = stp.getPropertiesValue(StringHelper.output, step);
+         LeftValue = stp.getPropertiesValue(StringHelper.leftvalue, step);
+         RightValue = stp.getPropertiesValue(StringHelper.rightvalue, step);
+         Condition = stp.getPropertiesValue(StringHelper.condition, step);
+         success = stp.getPropertiesValue(StringHelper.success, step);
+         failure = stp.getPropertiesValue(StringHelper.failure, step);
+         comparisiontype = stp.getPropertiesValue(StringHelper.comparisiontype, step);
+         //DVariables value = new DVariables();
+         //Variables.dynamicvariables
+         string value = "";
+         DVariables Lvalue = new DVariables();
+         DVariables Rvalue = new DVariables();
+         ILeftValue = LeftValue;
+         IRightValue = RightValue;
+         DateTime outdate;
+         if (Input.Trim() != "{matchdata}")
+         {
+             if (Input.Trim() != string.Empty)
+             {
+                 DataTable dt = new TypeHandler().getInput(Input, "Variable", executionID);
+                 if (dt.Rows.Count > 0)
+                 {
+                     value = dt.Rows[0][0].ToString();
+                 }
+             }
+         }
+         if (LeftType.Trim() != string.Empty && LeftType.Trim().ToLower() == StringHelper.variable)
+         {
+             Lvalue = new VariableHandler().getVariables(LeftValue, executionID);
+             if (Lvalue != null && Lvalue.vlvalue != null)
+             {
+                 ILeftValue = Lvalue.vlvalue;
+                 DataTable inputdt = new DataTable();
+                 try
+                 {
+                     inputdt = JsonConvert.DeserializeObject<DataTable>(ILeftValue);
+                     if (inputdt.Columns.Count > 0 && inputdt.Rows.Count > 0)
+                     {
+                         if (inputdt.Rows[0][0].ToString() != string.Empty)
+                         {
+                             ILeftValue = inputdt.Rows[0][0].ToString();
+                         }
+                         else
+                         {
+                             ILeftValue = "";
+                         }
+                     }
+                     else
+                     {
+                         ILeftValue = "";
+                     }
+                 }
+                 catch (Exception ex)
+                 {
+                     new Logger().LogException(ex);
+                     new cExecutionLog().add2Log(ex, step, StringHelper.server, StringHelper.exceptioncode);
+                 }
+             }
+             else
+             {
+                 ILeftValue = "";
+             }
+         }
+         if (RightType.Trim() != string.Empty && RightType.Trim().ToLower() == StringHelper.variable)
+         {
+             Rvalue = new VariableHandler().getVariables(RightValue, executionID);
+
+             if (Rvalue != null && Rvalue.vlvalue != null)
+             {
+                 IRightValue = Rvalue.vlvalue;
+                 DataTable inputdt = new DataTable();
+                 try
+                 {
+                     inputdt = JsonConvert.DeserializeObject<DataTable>(IRightValue);
+                     if (inputdt.Columns.Count > 0 && inputdt.Rows.Count > 0)
+                     {
+                         IRightValue = inputdt.Rows[0][0].ToString();
+                     }
+                     else
+                     {
+                         IRightValue = "";
+                     }
+                 }
+                 catch (Exception ex)
+                 {
+                     new Logger().LogException(ex);
+                     new cExecutionLog().add2Log(ex, step, StringHelper.server, StringHelper.exceptioncode);
+                 }
+             }
+             else
+             {
+                 IRightValue = "";
+             }
+         }
+         if (comparisiontype.ToLower().IndexOf("date") > -1)
+         {
+             if (comparisiontype.ToLower().IndexOf("date") > -1 && value.Trim() != string.Empty)
+             {
+                 if (DateTime.TryParse(value, out outdate))
+                 {
+                     answer = success;
+                 }
+                 else
+                 {
+                     answer = failure;
+                 }
+             }
+             else
+             {
+                 answer = failure;
+             }
+         }
+         else
+         {
+             // Count
+             if (comparisiontype.ToLower() == "length")
+             {
+                 if (LeftType.Trim() != string.Empty && LeftType.Trim().ToLower() == StringHelper.variable)
+                 {
+                     ILeftValue = ILeftValue.Length.ToString();
+                 }
+                 if (RightType.Trim() != string.Empty && RightType.Trim().ToLower() == StringHelper.variable)
+                 {
+                     IRightValue = IRightValue.Length.ToString();
+                 }
+             }
+             //
+
+             if (Condition == "!=")
+             {
+                 if (comparisiontype.ToLower() == "length")
+                 {
+                     if (int.Parse(ILeftValue) != int.Parse(IRightValue))
+                     {
+                         answer = success;
+                     }
+                     else
+                     {
+                         answer = failure;
+                     }
+                 }
+                 else
+                 {
+                     //if (int.Parse(ILeftValue) != int.Parse(IRightValue))
+                     if (ILeftValue != IRightValue)
+                     {
+                         answer = success;
+                     }
+                     else
+                     {
+                         answer = failure;
+                     }
+                 }
+             }
+             else if (Condition == "==")
+             {
+                 if (comparisiontype.ToLower() == "length")
+                 {
+                     if (int.Parse(ILeftValue) == int.Parse(IRightValue))
+                     {
+                         answer = success;
+                     }
+                     else
+                     {
+                         answer = failure;
+                     }
+                 }
+                 
+                 else if (comparisiontype.ToLower().IndexOf("mailcomparision") > -1)
+                 {
+                     
+                     if (Lvalue.vlvalue != null && Rvalue.vlvalue != null)
+                     {
+                         var Lrows = JsonConvert.DeserializeObject(Lvalue.vlvalue);
+                         var from = JsonConvert.DeserializeObject(Rvalue.vlvalue);
+                         int flag = 0;
+                         if (Lrows.Count > 0 && from.Count > 0)
+                         {
+                             for (int i = 0; i < Lrows.Count; i++)
+                             {
+                                 if (Lrows[i]["Sender"].Value != null)
+                                 {
+                                     string email = Lrows[i]["Sender"].Value;
+                                     if (email.Contains('@'))
+                                     {
+                                         domain = email.Split('@');
+                                     }
+                                     else
+                                     {
+                                         string mail = email + "@";
+                                         domain = mail.Split('@');
+                                     }
+                                     if(Lrows[i]["Attachments"].Value==null || Lrows[i]["Attachments"].Value=="" || Lrows[i]["Attachments"].Value==string.Empty)
+                                     {
+                                         if(from[0]["From"].Value.Contains(domain[1]) && (from[0]["Subject"].Value.Contains(Lrows[i]["Keywords"].Value)))
+                                         {
+                                             answer = success;
+                                             flag = 1;
+
+                                             vh.CreateVariable(Input, JsonConvert.SerializeObject(Lrows[i]), StringHelper.truee, true, "datatable", step.Robot_Id, executionID);
+                                            
+                                         }
+                                        
+                                     }
+                                     else if(Lrows[i]["Keywords"].Value==null || Lrows[i]["Keywords"].Value == "" || Lrows[i]["Keywords"].Value == string.Empty)
+                                     {
+                                         if (from[0]["From"].Value.Contains(domain[1]) && (from[0]["Attachment"].Value.Contains(Lrows[i]["Attachments"].Value)))
+                                         {
+                                             answer = success;
+                                             flag = 1;
+
+                                             vh.CreateVariable(Input, JsonConvert.SerializeObject(Lrows[i]), StringHelper.truee, true, "datatable", step.Robot_Id, executionID);
+                                         }
+                                     }
+                                     else 
+                                     {
+                                         if (from[0]["From"].Value.Contains(domain[1]) && (from[0]["Subject"].Value.Contains(Lrows[i]["Keywords"].Value) || from[0]["Attachment"].Value.Contains(Lrows[i]["Attachments"].Value)))
+                                         {
+                                             answer = success;
+                                             flag = 1;
+
+                                             vh.CreateVariable(Input, JsonConvert.SerializeObject(Lrows[i]), StringHelper.truee, true, "datatable", step.Robot_Id, executionID);
+                                         }
+                                     }
+                                 }
+                                 
+                             }
+                         }
+                         if (flag == 0)
+                         {
+                             answer = failure;
+                            
+                         }
+                     }
+                     else
+                     {
+                         answer = failure;
+                     }
+                 }
+                 else
+                 {
+                     //if (int.Parse(ILeftValue) == int.Parse(IRightValue))
+                     if (ILeftValue.Trim() == IRightValue.Trim())
+                     {
+                         answer = success;
+                     }
+                     else
+                     {
+                         answer = failure;
+                     }
+                 }
+             }
+             else if (Condition == "<")
+             {
+                 if (int.Parse(ILeftValue) < int.Parse(IRightValue))
+                 {
+                     answer = success;
+                 }
+                 else
+                 {
+                     answer = failure;
+                 }
+             }
+             else if (Condition == ">")
+             {
+                 if (int.Parse(ILeftValue) > int.Parse(IRightValue))
+                 {
+                     answer = success;
+                 }
+                 else
+                 {
+                     answer = failure;
+                 }
+             }
+             else if (Condition == "<=")
+             {
+                 if (int.Parse(ILeftValue) <= int.Parse(IRightValue))
+                 {
+                     answer = success;
+                 }
+                 else
+                 {
+                     answer = failure;
+                 }
+             }
+             else if (Condition == ">=")
+             {
+                 if (int.Parse(ILeftValue) >= int.Parse(IRightValue))
+                 {
+                     answer = success;
+                 }
+                 else
+                 {
+                     answer = failure;
+                 }
+             }
+         }
+
+         new VariableHandler().CreateVariable(Output, answer, "", true, "string", step.Robot_Id, executionID);
+         new cExecutionLog().add2Log(StringHelper.answer + answer, step.Robot_Id, step.Name, StringHelper.eventcode, false);
+         ret = StringHelper.success;
+     }
+     catch (Exception ex)
+     {
+         new Logger().LogException(ex);
+         new cExecutionLog().add2Log(ex, step, StringHelper.server, StringHelper.exceptioncode);
+         msgs.Add(new MethodResultHandler().createMessage(ex.Message, StringHelper.exceptioncode));
+         Method.Add(new MethodResultHandler().createMessage(this.GetType().Name, step.Name));
+         s = new StatusModel(StringHelper.exceptioncode, ex.Message, Method, StringHelper.falsee);
+     }
+     MethodResult mr;
+     if (ret == StringHelper.success)
+     {
+         Method.Add(new MethodResultHandler().createMessage(this.GetType().Name, step.Name));
+         s = new StatusModel(StringHelper.successcode, step.Name + StringHelper.execsuccess, Method, StringHelper.truee);
+         mr = new MethodResultHandler().createResultType(true, msgs, Variables.dynamicvariables, s);
+     }
+     else
+     {
+         mr = new MethodResultHandler().createResultType(false, msgs, null, s);
+     }
+     return mr;
+ }
+    
